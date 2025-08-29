@@ -36,7 +36,7 @@ def get_prices():
 @bot.message_handler(commands=['start'])
 def start(message):
     users.add(message.chat.id)
-    bot.reply_to(message, "سلام 👋 از این به بعد نرخ‌ها رو هر ۵ دقیقه برات می‌فرستم ⏳")
+    bot.reply_to(message, "سلام 👋 از این به بعد نرخ‌ها را می‌فرستم ⏳")
 
 # حلقه ارسال خودکار
 def send_prices():
@@ -48,7 +48,7 @@ def send_prices():
                     bot.send_message(user, prices)
                 except Exception as e:
                     print(f"خطا در ارسال به {user}: {e}")
-        time.sleep(300)  # هر ۵ دقیقه
+        time.sleep(3600)  # 1 هر ساعت 
 
 # اجرای بات
 Thread(target=send_prices, daemon=True).start()
