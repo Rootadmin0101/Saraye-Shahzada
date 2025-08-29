@@ -1,1 +1,1 @@
-worker: python SarayeShazada.py
+worker: python bot.py
