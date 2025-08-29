@@ -1,49 +1,55 @@
+import os
 import time
 import requests
+import telebot
 from bs4 import BeautifulSoup
 from threading import Thread
 
-TOKEN = "YOUR_BOT_TOKEN"
-URL = f"https://api.telegram.org/bot{TOKEN}/"
-users = set()  # لیست کاربرانی که /start زده‌اند
+TOKEN = os.getenv("BOT_TOKEN")  # توکن از Railway
+bot = telebot.TeleBot(TOKEN)
 
-def get_rates():
-    res = requests.get("https://www.dab.gov.af/dr/exchange-rates")
-    soup = BeautifulSoup(res.text, "html.parser")
-    rows = soup.select("table tr")
-    rates = []
-    for row in rows[1:]:  # رد کردن هدر
+# لیست کاربرا
+users = set()
+
+# گرفتن نرخ ارز از سایت بانک افغانستان
+def get_prices():
+    url = "https://www.dab.gov.af/dr/exchange-rates"
+    response = requests.get(url, timeout=10)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    table = soup.find("table")
+    if not table:
+        return "⚠️ جدول نرخ‌ها پیدا نشد."
+
+    rows = table.find_all("tr")
+    result = "💱 نرخ امروز:\n\n"
+    for row in rows[1:]:
         cols = row.find_all("td")
-        if len(cols) >= 2:
+        if len(cols) >= 3:
             currency = cols[0].get_text(strip=True)
-            price = cols[1].get_text(strip=True)
-            rates.append(f"{currency} : {price}")
-    return "📊 نرخ ارزهای امروز:\n\n" + "\n".join(rates)
+            buy = cols[1].get_text(strip=True)
+            sell = cols[2].get_text(strip=True)
+            result += f"{currency}: خرید {buy} | فروش {sell}\n"
+    return result
 
-def send_message(chat_id, text):
-    requests.post(URL + "sendMessage", json={"chat_id": chat_id, "text": text})
+# وقتی کاربر استارت بزنه
+@bot.message_handler(commands=['start'])
+def start(message):
+    users.add(message.chat.id)
+    bot.reply_to(message, "سلام 👋 از این به بعد نرخ‌ها رو هر ۵ دقیقه برات می‌فرستم ⏳")
 
-def handle_updates():
-    offset = None
+# حلقه ارسال خودکار
+def send_prices():
     while True:
-        resp = requests.get(URL + "getUpdates", params={"offset": offset, "timeout": 20}).json()
-        for update in resp.get("result", []):
-            offset = update["update_id"] + 1
-            if "message" in update and "text" in update["message"]:
-                chat_id = update["message"]["chat"]["id"]
-                text = update["message"]["text"]
-                if text == "/start":
-                    users.add(chat_id)
-                    send_message(chat_id, "سلام! ✅ از این به بعد نرخ ارزها هر چند دقیقه برایت میاد.")
-        time.sleep(1)
+        if users:
+            prices = get_prices()
+            for user in list(users):
+                try:
+                    bot.send_message(user, prices)
+                except Exception as e:
+                    print(f"خطا در ارسال به {user}: {e}")
+        time.sleep(300)  # هر ۵ دقیقه
 
-def scheduler(interval=300):  # هر 300 ثانیه (5 دقیقه)
-    while True:
-        rates = get_rates()
-        for user in users:
-            send_message(user, rates)
-        time.sleep(interval)
-
-# اجرای دو thread همزمان: یکی برای گرفتن آپدیت‌ها، یکی برای ارسال زمان‌بندی‌شده
-Thread(target=handle_updates).start()
-Thread(target=scheduler).start()
+# اجرای بات
+Thread(target=send_prices, daemon=True).start()
+bot.infinity_polling()
