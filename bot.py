@@ -14,9 +14,15 @@ users = set()
 # گرفتن نرخ ارز از سایت بانک افغانستان
 def get_prices():
     url = "https://www.dab.gov.af/dr/exchange-rates"
-    response = requests.get(url, timeout=10)
-    soup = BeautifulSoup(response.text, "html.parser")
+    try:
+        response = requests.get(url, timeout=10)  # timeout اضافه شد
+        response.raise_for_status()
+    except requests.exceptions.Timeout:
+        return "⏳ ارتباط با سرور طول کشید. لطفاً بعداً امتحان کنید."
+    except requests.exceptions.RequestException as e:
+        return f"⚠️ خطا در دریافت نرخ‌ها: {e}"
 
+    soup = BeautifulSoup(response.text, "html.parser")
     table = soup.find("table")
     if not table:
         return "⚠️ جدول نرخ‌ها پیدا نشد."
@@ -45,11 +51,11 @@ def send_prices():
             prices = get_prices()
             for user in list(users):
                 try:
-                    bot.send_message(user, prices)
+                    bot.send_message(user, prices, timeout=10)
                 except Exception as e:
                     print(f"خطا در ارسال به {user}: {e}")
-        time.sleep(3600)  # 1 هر ساعت 
+        time.sleep(3600)  # هر 1 ساعت
 
 # اجرای بات
 Thread(target=send_prices, daemon=True).start()
-bot.infinity_polling()
+bot.infinity_polling(timeout=30, long_polling_timeout=10)
